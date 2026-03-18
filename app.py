@@ -25,23 +25,36 @@ def search_jobs():
     if not sites:
         return jsonify({"error": "No valid site specified. Use: linkedin, indeed"}), 400
 
+    # Parse countries for multi-country support
+    countries = [c.strip() for c in location.split(",") if c.strip()]
+    if not countries:
+        countries = ["Morocco"]
+
     try:
-        jobs = scrape_jobs(
-            site_name=sites,
-            search_term=query,
-            location=location,
-            results_wanted=limit,
-            hours_old=168,  # last 7 days
-            country_indeed="Morocco",
-        )
+        import pandas as pd
+        all_jobs = pd.DataFrame()
+        for country in countries:
+            try:
+                country_jobs = scrape_jobs(
+                    site_name=sites,
+                    search_term=query,
+                    location=country,
+                    results_wanted=limit,
+                    hours_old=168,
+                    country_indeed=country,
+                )
+                all_jobs = pd.concat([all_jobs, country_jobs], ignore_index=True)
+            except Exception as e:
+                print(f"Error scraping {country}: {e}")
+                continue
 
         results = []
-        for _, row in jobs.iterrows():
+        for _, row in all_jobs.iterrows():
             results.append({
                 "id": f"job_{hash(str(row.get('job_url', '')))}_{len(results)}",
                 "company": str(row.get("company_name", "")) or "Entreprise",
                 "title": str(row.get("title", "")) or query,
-                "city": str(row.get("location", "")) or location,
+                "city": str(row.get("location", "")) or ", ".join(countries),
                 "date": str(row.get("date_posted", ""))[:10] if row.get("date_posted") else "",
                 "url": str(row.get("job_url", "")) or "",
                 "source": str(row.get("site", sites[0])).capitalize(),
@@ -53,6 +66,7 @@ def search_jobs():
             "count": len(results),
             "query": query,
             "sites": sites,
+            "countries": countries,
         })
 
     except Exception as e:
