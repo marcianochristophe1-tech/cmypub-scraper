@@ -52,7 +52,7 @@ def search_jobs():
         for _, row in all_jobs.iterrows():
             results.append({
                 "id": f"job_{hash(str(row.get('job_url', '')))}_{len(results)}",
-                "company": str(row.get("company_name", "")) or "Entreprise",
+                "company": str(row.get("company_name", "")).strip() if row.get("company_name") and str(row.get("company_name", "")).strip() not in ("", "nan", "None") else "",
                 "title": str(row.get("title", "")) or query,
                 "city": str(row.get("location", "")) or ", ".join(countries),
                 "date": str(row.get("date_posted", ""))[:10] if row.get("date_posted") else "",
