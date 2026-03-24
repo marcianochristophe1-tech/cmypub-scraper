@@ -1,22 +1,37 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from jobspy import scrape_jobs
-import traceback
+import traceback, time, re
+from collections import defaultdict
 
 app = Flask(__name__)
 CORS(app, origins=[
     "https://c-my-pub.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
 ])
+
+# Simple rate limiting (in-memory)
+_rate_limit = defaultdict(list)
+def check_rate_limit(ip, max_requests=10, window=60):
+    now = time.time()
+    _rate_limit[ip] = [t for t in _rate_limit[ip] if now - t < window]
+    if len(_rate_limit[ip]) >= max_requests:
+        return False
+    _rate_limit[ip].append(now)
+    return True
 
 
 @app.route("/api/search", methods=["GET"])
 def search_jobs():
-    query = request.args.get("query", "").strip()
-    site = request.args.get("site", "indeed")  # "linkedin", "indeed", "linkedin,indeed"
+    if not check_rate_limit(request.remote_addr):
+        return jsonify({"error": "Trop de requêtes. Réessayez dans une minute.", "results": [], "count": 0}), 429
+
+    query = re.sub(r'[^\w\s\-\.\,\']', '', request.args.get("query", "").strip())[:100]
+    site = request.args.get("site", "indeed")
     location = request.args.get("location", "Morocco")
-    limit = min(int(request.args.get("limit", "15")), 30)
+    try:
+        limit = min(int(request.args.get("limit", "15")), 30)
+    except ValueError:
+        limit = 15
 
     if not query:
         return jsonify({"error": "Missing query parameter"}), 400
@@ -70,9 +85,9 @@ def search_jobs():
         })
 
     except Exception as e:
-        traceback.print_exc()
+        traceback.print_exc()  # Log server-side only
         return jsonify({
-            "error": f"Scraping failed: {str(e)}",
+            "error": "La recherche a échoué. Réessayez dans quelques instants.",
             "results": [],
             "count": 0,
         }), 500
@@ -84,4 +99,4 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=False)
