@@ -65,13 +65,21 @@ def search_jobs():
 
         results = []
         for _, row in all_jobs.iterrows():
+            # Fix LinkedIn URL format
+            raw_url = str(row.get("job_url_direct", "") or row.get("job_url", "") or "")
+            if "linkedin.com/job/" in raw_url:
+                # Extract job ID and convert to proper format
+                import re
+                m = re.search(r'/job/(\d+)', raw_url)
+                if m:
+                    raw_url = f"https://www.linkedin.com/jobs/view/{m.group(1)}"
             results.append({
-                "id": f"job_{hash(str(row.get('job_url', '')))}_{len(results)}",
+                "id": f"job_{hash(str(raw_url))}_{len(results)}",
                 "company": str(row.get("company_name", "")).strip() if row.get("company_name") and str(row.get("company_name", "")).strip() not in ("", "nan", "None") else "",
                 "title": str(row.get("title", "")) or query,
                 "city": str(row.get("location", "")) or ", ".join(countries),
                 "date": str(row.get("date_posted", ""))[:10] if row.get("date_posted") else "",
-                "url": str(row.get("job_url", "")) or "",
+                "url": raw_url,
                 "source": str(row.get("site", sites[0])).capitalize(),
                 "description": str(row.get("description", ""))[:200] if row.get("description") else "",
             })
